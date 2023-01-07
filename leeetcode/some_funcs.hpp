@@ -12,7 +12,7 @@ void cout_vec(std::vector<T> vec) {
 };
 
 template <typename T>
-void cout_vecvec(std::vector<std::vector<T>> vecs) {
+void cout_vec(std::vector<std::vector<T>> vecs) {
   for (auto& vec : vecs) {
     for (auto& el : vec) {
       std::cout << el << " ";

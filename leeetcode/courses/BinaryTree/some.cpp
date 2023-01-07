@@ -26,12 +26,40 @@ TreeNode *kek(int data) {
   return (node);
 }
 
-int main(int argc, char const* argv[]) {
+int main(int argc, char const *argv[]) {
   vector<int> nums{-9, -2, -1, 0, 1, 2, 4, 5};
 
   int copy;
 
+  class Solution {
+   public:
+    bool isCousins(TreeNode *root, int x, int y) {
+      void solve(TreeNode * root, int x, int y, int lvl, unordered_map<int, pair<int, int>> &um) {
+        if (root == NULL) return;
 
+        if (root->left) {
+          um[root->left->val] = {lvl + 1, root->val};
+        }
+        if (root->right) {
+          um[root->right->val] = {lvl + 1, root->val};
+        }
+
+        solve(root->left, x, y, lvl + 1, um);
+        solve(root->right, x, y, lvl + 1, um);
+      }
+
+      bool isCousins(TreeNode * root, int x, int y) {
+        unordered_map<int, pair<int, int>> um;
+
+        solve(root, x, y, 0, um);
+
+        if (um[x].first == um[y].first && um[x].second != um[y].second)
+          return true;
+
+        return false;
+      }
+    }
+  };
 
   class Solution {
    public:
@@ -51,7 +79,7 @@ int main(int argc, char const* argv[]) {
       return val;
     }
 
-    vector<int> inorderTraversal(TreeNode* root) {
+    vector<int> inorderTraversal(TreeNode *root) {
       vector<TreeNode *> nodes;
       vector<int> val;
       if (!root) return val;
@@ -100,4 +128,3 @@ int main(int argc, char const* argv[]) {
 
   return 0;
 }
-
