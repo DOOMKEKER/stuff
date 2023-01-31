@@ -9,9 +9,16 @@ import (
 	"os"
 	"runtime"
 	"sync"
+
+	"babushka/some"
 )
 
 // get english words from site https://www.ef.com/wwen/english-resources/english-vocabulary/top-3000-words/
+
+type Word struct {
+	Score float64 // precision is not important
+	Word  string
+}
 
 func main() {
 	file, err := os.Open("file.txt")
@@ -36,17 +43,27 @@ func main() {
 		return lines
 	}}
 
-	newWordch := make(chan string, 100)
+	newWordch := make(chan Word, 100)
 
 	var wg2 sync.WaitGroup
 
 	wg2.Add(1)
 
+	topWords := make([]Word, 0, 10)
+
 	go func() {
-		i := 0
 		for word := range newWordch {
-			i++
-			println(i, word)
+			if len(topWords) < cap(topWords) {
+				topWords = append(topWords, word)
+				continue
+			}
+
+			for i := 0; i < len(topWords); i++ {
+				if word.Score < topWords[i].Score {
+					topWords[i] = word
+					break
+				}
+			}
 		}
 
 		wg2.Done()
@@ -94,14 +111,29 @@ loop:
 	close(newWordch)
 	wg2.Wait()
 	println("all goroutines done")
+
+	for _, word := range topWords {
+		println(word.Word, word.Score)
+	}
 }
 
-func readWordsFromChunk(buffer *[]byte, chankPool *sync.Pool, newWordch chan<- string) {
+func readWordsFromChunk(buffer *[]byte, chankPool *sync.Pool, newWordch chan<- Word) {
 	scanner := bufio.NewScanner(bytes.NewReader(*buffer))
 	chankPool.Put(buffer)
 
 	for scanner.Scan() {
 		word := scanner.Text()
-		newWordch <- word
+		score := getScore(word)
+		newWordch <- Word{Score: score, Word: word}
 	}
+}
+
+func getScore(word string) float64 {
+	var distance uint8
+
+	for i := 0; i < len(word)-1; i++ {
+		distance += some.GetDistance(word[i], word[i+1])
+	}
+
+	return float64(distance) / float64(len(word))
 }

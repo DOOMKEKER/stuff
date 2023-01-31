@@ -1,17 +1,17 @@
-package main
+package some
 
 import (
 	"math"
 )
 
 // slice keyboard.
-var keyboard = [][]byte{ //nolint:gochecknoglobals // it's a demo.
+var Keyboard = [][]byte{ //nolint:gochecknoglobals // it's a demo.
 	{'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'},
 	{'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'},
 	{'z', 'x', 'c', 'v', 'b', 'n', 'm'},
 }
 
-var keyboardMap = map[byte][]int8{ //nolint:gochecknoglobals // it's a demo.
+var KeyboardMap = map[byte][]int8{ //nolint:gochecknoglobals // it's a demo.
 	'q': {0, 0},
 	'w': {0, 1},
 	'e': {0, 2},
@@ -40,9 +40,10 @@ var keyboardMap = map[byte][]int8{ //nolint:gochecknoglobals // it's a demo.
 	'm': {2, 6},
 }
 
-func getDistance(letterOne, letterTwo byte) int8 {
-	oneX, oneY := keyboardMap[letterOne][0], keyboardMap[letterOne][1]
-	twoX, twoY := keyboardMap[letterTwo][0], keyboardMap[letterTwo][1]
+// we trust that the words are all with a small letter and without characters.
+func GetDistance(letterOne, letterTwo byte) uint8 {
+	oneX, oneY := KeyboardMap[letterOne][0], KeyboardMap[letterOne][1]
+	twoX, twoY := KeyboardMap[letterTwo][0], KeyboardMap[letterTwo][1]
 
-	return int8(math.Abs(float64(oneX-twoX)) + math.Abs(float64(oneY-twoY)))
+	return uint8(math.Abs(float64(oneX-twoX)) + math.Abs(float64(oneY-twoY)))
 }
