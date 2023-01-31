@@ -1,4 +1,4 @@
-package some
+package helper
 
 import (
 	"math"

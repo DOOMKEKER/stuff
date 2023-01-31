@@ -10,7 +10,7 @@ import (
 	"runtime"
 	"sync"
 
-	"babushka/some"
+	"babushka/helper"
 )
 
 // get english words from site https://www.ef.com/wwen/english-resources/english-vocabulary/top-3000-words/
@@ -132,7 +132,7 @@ func getScore(word string) float64 {
 	var distance uint8
 
 	for i := 0; i < len(word)-1; i++ {
-		distance += some.GetDistance(word[i], word[i+1])
+		distance += helper.GetDistance(word[i], word[i+1])
 	}
 
 	return float64(distance) / float64(len(word))
