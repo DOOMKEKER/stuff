@@ -21,7 +21,7 @@ type Word struct {
 	Word  string
 }
 
-const TOP = 10
+const TOP = 20
 
 func main() {
 	file, err := os.Open("file.txt")
@@ -37,10 +37,12 @@ func main() {
 		return
 	}
 
+	// TODO: compare with a x2 goroutines. (while gorutine make syscall for read, another goroutine can read from buffer)?
 	sizeOfFile := fileInfo.Size()
 	proc := runtime.GOMAXPROCS(0) - 1
 	kbPerGoroutine := int(math.Ceil(float64(sizeOfFile) / float64(proc) / 1024))
 
+	// TODO: need more Pool for word?
 	linesPool := sync.Pool{New: func() interface{} {
 		lines := make([]byte, kbPerGoroutine*1024)
 		return lines
@@ -54,6 +56,7 @@ func main() {
 
 	topWords := make([]Word, 0, TOP)
 
+	// TODO: benchmark, compare with >1 read goroutines || 1 read 1 write goroutine
 	go func() {
 		for word := range newWordch {
 			if len(topWords) < cap(topWords) {
@@ -174,10 +177,11 @@ func chooseWordsForPassword(topWords []Word) (response string) {
 		return top[i].Distance < top[j].Distance
 	})
 
-	// Ужас...
+	// Ужас... Будто на питоне пишу
 	sumLen := 0
 	index := 0
 	wasWord := make(map[int]bool)
+	// Choose first two word from top, because they have the smallest distance.
 	sumLen += len(topWords[top[index].WordFirst].Word) + len(topWords[top[index].WordSecond].Word)
 	response += topWords[top[index].WordFirst].Word + topWords[top[index].WordSecond].Word
 
@@ -201,7 +205,7 @@ func getIndexNexWord(top *[]Top, wordSecond int, wasWord map[int]bool) int {
 	indexMinDist := 0
 
 	for i := 0; i < len(*top); i++ {
-		// between WordFirst and wordSecond should be min distance
+		// between WordFirst and wordSecond should be min distance.
 		if (*top)[i].WordFirst == wordSecond && !wasWord[(*top)[i].WordSecond] {
 			return i // we alreaady sorded slice by distance
 		}
