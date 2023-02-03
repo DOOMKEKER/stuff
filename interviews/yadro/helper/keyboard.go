@@ -41,9 +41,9 @@ var KeyboardMap = map[byte][]int8{ //nolint:gochecknoglobals // it's a demo.
 }
 
 // we trust that the words are all with a small letter and without characters.
-func GetDistance(letterOne, letterTwo byte) uint8 {
+func GetDistance(letterOne, letterTwo byte) uint32 {
 	oneX, oneY := KeyboardMap[letterOne][0], KeyboardMap[letterOne][1]
 	twoX, twoY := KeyboardMap[letterTwo][0], KeyboardMap[letterTwo][1]
 
-	return uint8(math.Abs(float64(oneX-twoX)) + math.Abs(float64(oneY-twoY)))
+	return uint32(math.Abs(float64(oneX-twoX)) + math.Abs(float64(oneY-twoY)))
 }

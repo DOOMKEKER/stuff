@@ -8,8 +8,8 @@ import (
 	"math"
 	"os"
 	"runtime"
-	"sort"
 	"sync"
+	"sync/atomic"
 
 	"babushka/helper"
 )
@@ -17,11 +17,9 @@ import (
 // get english words from site https://www.ef.com/wwen/english-resources/english-vocabulary/top-3000-words/
 
 type Word struct {
-	Score float64 // precision is not important
-	Word  string
+	Dist uint32
+	Word string
 }
-
-const TOP = 20
 
 func main() {
 	file, err := os.Open("file.txt")
@@ -54,22 +52,12 @@ func main() {
 
 	wg2.Add(1)
 
-	topWords := make([]Word, 0, TOP)
+	Words := make([]Word, 0, 5000)
 
 	// TODO: benchmark, compare with >1 read goroutines || 1 read 1 write goroutine
 	go func() {
 		for word := range newWordch {
-			if len(topWords) < cap(topWords) {
-				topWords = append(topWords, word)
-				continue
-			}
-
-			for i := 0; i < len(topWords); i++ {
-				if word.Score < topWords[i].Score {
-					topWords[i] = word
-					break
-				}
-			}
+			Words = append(Words, word)
 		}
 
 		wg2.Done()
@@ -122,7 +110,7 @@ loop:
 	// 	println(word.Word, word.Score)
 	// }
 
-	println("\n", "Babushka here's your password! ", chooseWordsForPassword(topWords))
+	println("\n", "Babushka here's your password! ", chooseWordsForPassword(Words))
 }
 
 func readWordsFromChunk(buffer *[]byte, chankPool *sync.Pool, newWordch chan<- Word) {
@@ -132,84 +120,149 @@ func readWordsFromChunk(buffer *[]byte, chankPool *sync.Pool, newWordch chan<- W
 	for scanner.Scan() {
 		word := scanner.Text()
 		score := getScore(word)
-		newWordch <- Word{Score: score, Word: word}
+		newWordch <- Word{Dist: score, Word: word}
 	}
 }
 
-func getScore(word string) float64 {
-	var distance uint8
+func getScore(word string) uint32 {
+	var distance uint32
 
 	for i := 0; i < len(word)-1; i++ {
-		distance += helper.GetDistance(word[i], word[i+1])
+		distance += uint32(helper.GetDistance(word[i], word[i+1]))
 	}
 
-	return float64(distance) / float64(len(word))
+	return distance
 }
 
-type Top struct {
-	WordFirst  int
-	WordSecond int
-	Distance   uint8
-}
+func chooseWordsForPassword(words []Word) (response string) {
 
-func chooseWordsForPassword(topWords []Word) (response string) {
-	// create slice of all possible combinations
-	// and sort it by distance
-	top := make([]Top, 0, TOP*TOP)
+	// for calculated word
+	var (
+		score atomic.Uint32
+		mI    sync.Map
+		mJ    sync.Map
+		mK    sync.Map
+		wg    sync.WaitGroup
+	)
 
-	// TODO: how to optimize...?
-	for i := 0; i < len(topWords); i++ {
-		for j := 0; j < len(topWords); j++ {
-			if i == j {
-				continue // skip same words? or not?
+	score.Store(65535)
+
+	from := 0
+	delta := len(words) / runtime.GOMAXPROCS(0)
+	var pass atomic.Value
+
+	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
+		wg.Add(1)
+
+		go func(from2 int) {
+
+			for i := from2; i < from2+delta; i++ {
+				var saveWordI Word
+
+				lastLetterI := words[i].Word[len(words[i].Word)-1]
+				if v, ok := mI.Load(string(lastLetterI) + fmt.Sprint(len(words[i].Word))); ok {
+					dist := getDist([]Word{v.(Word), words[i]})
+					if score.Load() > dist {
+						println(dist, words[i].Word, 4)
+						pass.Store(words[i].Word + v.(Word).Word)
+						score.Store(dist)
+					}
+
+					println("mI hit")
+					continue
+				}
+
+				for j := 0; j < len(words); j++ {
+					var saveWordJ Word
+
+					lastLetterJ := words[j].Word[len(words[j].Word)-1]
+					if v, ok := mJ.Load(string(lastLetterJ) + fmt.Sprint(len(words[i].Word)+len(words[j].Word))); ok {
+						dist := getDist([]Word{v.(Word), words[i], words[j]})
+						if score.Load() > dist {
+							println(dist, words[i].Word, words[j].Word, 3)
+							pass.Store(words[i].Word + words[j].Word + v.(Word).Word)
+							score.Store(dist)
+						}
+
+						// println("mJ hit")
+						continue
+					}
+
+					for k := 0; k < len(words); k++ {
+						var saveWordK Word
+
+						lastLetterK := words[k].Word[len(words[k].Word)-1]
+						if v, ok := mK.Load(string(lastLetterK) + fmt.Sprint(len(words[i].Word)+len(words[j].Word)+len(words[k].Word))); ok {
+							dist := getDist([]Word{v.(Word), words[i], words[j], words[k]})
+							if score.Load() > dist {
+								println(dist, words[i].Word, words[j].Word, words[k].Word, 2)
+								pass.Store(words[i].Word + words[j].Word + words[k].Word + v.(Word).Word)
+								score.Store(dist)
+							}
+
+							// println("mK hit")
+							continue
+						}
+
+						for l := 0; l < len(words); l++ {
+							combination := []Word{words[i], words[j], words[k], words[l]}
+							if len(combination[0].Word)+len(combination[1].Word)+len(combination[2].Word)+len(combination[3].Word) >= 20 &&
+								len(combination[0].Word)+len(combination[1].Word)+len(combination[2].Word)+len(combination[3].Word) <= 24 {
+
+								dist := getDist(combination)
+								if score.Load() > dist {
+									saveWordI.Word = combination[1].Word + combination[2].Word + combination[3].Word
+									saveWordI.Dist = getDist(combination[1:])
+
+									saveWordJ.Word = combination[2].Word + combination[3].Word
+									saveWordJ.Dist = getDist(combination[2:])
+
+									saveWordK.Word = combination[3].Word
+									saveWordK.Dist = getDist(combination[3:])
+
+									score.Store(dist)
+									pass.Store(combination[0].Word + combination[1].Word + combination[2].Word + combination[3].Word)
+									println(score.Load(), combination[0].Word, combination[1].Word, combination[2].Word, combination[3].Word)
+								}
+							}
+						}
+
+						if saveWordK.Word != "" {
+							mK.Store(string(lastLetterK)+fmt.Sprint(len(words[i].Word)+len(words[j].Word)+len(words[k].Word)), saveWordK)
+						}
+					}
+
+					if saveWordJ.Word != "" {
+						mJ.Store(string(lastLetterJ)+fmt.Sprint(len(words[i].Word)+len(words[j].Word)), saveWordJ)
+					}
+				}
+
+				if saveWordI.Word != "" {
+					mI.Store(string(lastLetterI)+fmt.Sprint(len(words[i].Word)), saveWordI)
+				}
 			}
 
-			firstChar := topWords[j].Word[0]
-			lastChar := topWords[i].Word[len(topWords[i].Word)-1]
-			dist := helper.GetDistance(lastChar, firstChar)
+			wg.Done()
+		}(from)
 
-			top = append(top, Top{i, j, dist})
-		}
+		from += delta
 	}
 
-	// it won't get any worse =)
-	sort.Slice(top, func(i, j int) bool {
-		return top[i].Distance < top[j].Distance
-	})
+	wg.Wait()
 
-	// Ужас... Будто на питоне пишу
-	sumLen := 0
-	index := 0
-	wasWord := make(map[int]bool)
-	// Choose first two word from top, because they have the smallest distance.
-	sumLen += len(topWords[top[index].WordFirst].Word) + len(topWords[top[index].WordSecond].Word)
-	response += topWords[top[index].WordFirst].Word + topWords[top[index].WordSecond].Word
+	println(score.Load())
 
-	for {
-		wasWord[top[index].WordFirst] = true
-		wasWord[top[index].WordSecond] = true
-		index = getIndexNexWord(&top, top[index].WordSecond, wasWord)
-
-		if sumLen > 20 && sumLen < 30 {
-			break
-		}
-
-		sumLen += len(topWords[top[index].WordSecond].Word)
-		response += topWords[top[index].WordSecond].Word
-	}
-
-	return response
+	return pass.Load().(string)
 }
 
-func getIndexNexWord(top *[]Top, wordSecond int, wasWord map[int]bool) int {
-	indexMinDist := 0
-
-	for i := 0; i < len(*top); i++ {
-		// between WordFirst and wordSecond should be min distance.
-		if (*top)[i].WordFirst == wordSecond && !wasWord[(*top)[i].WordSecond] {
-			return i // we alreaady sorded slice by distance
-		}
+func getDist(combination []Word) (resp uint32) {
+	for i := 0; i < len(combination); i++ {
+		resp += combination[i].Dist
 	}
 
-	return indexMinDist
+	for i := 0; i < len(combination)-1; i++ {
+		resp += helper.GetDistance(combination[i].Word[len(combination[i].Word)-1], combination[i+1].Word[0])
+	}
+
+	return
 }
